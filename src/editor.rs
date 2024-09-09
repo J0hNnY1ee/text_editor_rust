@@ -1,5 +1,5 @@
 mod terminal;
-use std::io::{stdout, Error};
+use std::io::Error;
 
 use crossterm::{
     event::{
@@ -8,8 +8,7 @@ use crossterm::{
         KeyCode::Char,
         KeyEvent, KeyModifiers,
     },
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType},
+    terminal::enable_raw_mode,
 };
 use terminal::Terminal;
 
