@@ -1,8 +1,7 @@
 use std::io::{stdout, Error, Write};
 
 use crossterm::{
-    cursor::{Hide, MoveTo, Show},
-    execute, queue,
+    cursor::{Hide, MoveTo, Show}, queue,
     style::Print,
     terminal::{disable_raw_mode, enable_raw_mode, size, Clear},
 };
