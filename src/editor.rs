@@ -10,7 +10,7 @@ use crossterm::{
     },
     terminal::enable_raw_mode,
 };
-use terminal::Terminal;
+use terminal::{Size, Terminal};
 
 pub struct Editor {
     should_quit: bool,
@@ -56,23 +56,25 @@ impl Editor {
     }
 
     fn refresh_screen(&self) -> Result<(), Error> {
+        Terminal::hidd_cursor()?;
         if self.should_quit {
             Terminal::clear_screen()?;
-            print!("Goodbye.\r\n");
+            Terminal::print("Goodbye.\r\n")?;
         } else {
-            {
-                Self::draw_rows()?;
-                Terminal::move_cursor_to(0, 0)?;
-            }
+            Self::draw_rows()?;
+            Terminal::move_cursor_to(terminal::Position { x: 0, y: 0 })?;
         }
+        Terminal::show_cursor()?;
+        Terminal::execute()?;
         Ok(())
     }
     fn draw_rows() -> Result<(), Error> {
-        let height = Terminal::size()?.1;
+        let Size { height, .. } = Terminal::size()?;
         for current_row in 0..height {
-            print!("~");
+            Terminal::clear_line()?;
+            Terminal::print("~")?;
             if current_row + 1 < height {
-                println!("\r")
+                Terminal::print("\r\n")?;
             }
         }
         Ok(())
