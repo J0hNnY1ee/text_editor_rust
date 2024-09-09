@@ -8,8 +8,8 @@ use crossterm::{
 pub struct Editor {}
 
 impl Editor {
-    pub fn default() -> Self {
-        Editor {}
+    pub const fn default() -> Self {
+        Self {}
     }
     pub fn run(&self) {
         enable_raw_mode().unwrap();
