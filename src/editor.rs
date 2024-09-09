@@ -1,36 +1,77 @@
-use std::io::Error;
+use std::io::{stdout, Error};
 
 use crossterm::{
-    event::{read, Event::Key, KeyCode::Char},
-    terminal::{disable_raw_mode, enable_raw_mode},
+    event::{
+        read,
+        Event::{self, Key},
+        KeyCode::Char,
+        KeyEvent, KeyModifiers,
+    },
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType},
 };
 
-pub struct Editor {}
+pub struct Editor {
+    should_quit: bool,
+}
 
 impl Editor {
     pub const fn default() -> Self {
-        Self {}
+        Self { should_quit: false }
     }
-    pub fn run(&self) {
-        if let Err(err) = self.repl() {
-            panic!("{err:#?}");
-        }
-        println!("Goodbye.\r");
+    pub fn run(&mut self){
+        Self::initialize().unwrap();
+        let result = self.repl();
+        Self::terminate().unwrap();
+        result.unwrap()
     }
 
-    fn repl(&self) -> Result<(), Error> {
+    fn initialize() -> Result<(), Error> {
+        enable_raw_mode()?;
+        Self::clear_screen()
+    }
+
+    fn terminate() -> Result<(), Error> {
+        disable_raw_mode()
+    }
+
+    fn clear_screen() -> Result<(), Error> {
+        let mut stdout = stdout();
+        execute!(stdout, Clear(ClearType::All))
+    }
+    fn repl(&mut self) -> Result<(), Error> {
         enable_raw_mode()?;
         loop {
-            if let Key(event) = read()? {
-                println!("{event:?} \r");
-                if let Char(c) = event.code {
-                    if c == 'q' {
-                        break;
-                    }
-                }
+            let event = read()?;
+            self.evaluate_event(&event);
+            self.refresh_screen()?;
+            if self.should_quit {
+                break;
             }
         }
-        disable_raw_mode()?;
+        Ok(())
+    }
+
+    fn evaluate_event(&mut self, event: &Event) {
+        if let Key(KeyEvent {
+            code, modifiers, ..
+        }) = event
+        {
+            match code {
+                Char('q') if *modifiers == KeyModifiers::CONTROL => {
+                    self.should_quit = true;
+                }
+                _ => (),
+            }
+            println!("{code} \r")
+        }
+    }
+
+    fn refresh_screen(&self) -> Result<(), Error> {
+        if self.should_quit {
+            Self::clear_screen()?;
+            print!("Goodbye.\r\n");
+        }
         Ok(())
     }
 }
