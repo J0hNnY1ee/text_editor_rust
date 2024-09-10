@@ -13,8 +13,6 @@ use crossterm::{
 };
 use terminal::{Position, Size, Terminal};
 use view::View;
-const NAME: &str = env!("CARGO_PKG_NAME");
-const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[derive(Clone, Copy, Default)]
 pub struct Location {
     x: usize,

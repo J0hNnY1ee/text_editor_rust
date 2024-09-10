@@ -9,7 +9,7 @@ impl View {
     pub fn render() -> Result<(), Error> {
         let Size { height, .. } = Terminal::size()?;
         Terminal::clear_line()?;
-        Terminal::print("Hello, World!\r\n");
+        Terminal::print("Hello, World!\r\n")?;
         for current_row in 1..height {
             Terminal::clear_line()?;
             let welcome_line = height as f64 * 0.382;
