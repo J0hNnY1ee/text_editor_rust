@@ -1,4 +1,3 @@
-use core::fmt::Display;
 use crossterm::{
     cursor::{Hide, MoveTo, Show},
     queue,

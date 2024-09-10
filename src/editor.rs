@@ -32,7 +32,7 @@ impl Editor {
         let result = self.repl();
         Terminal::terminate().unwrap();
 
-        result.unwrap()
+        result.unwrap();
     }
 
     fn repl(&mut self) -> Result<(), Error> {

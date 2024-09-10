@@ -27,7 +27,7 @@ impl View {
 
     fn draw_welcome_message() -> Result<(), Error> {
         let mut welcome_message = format!("{NAME} editor -- version {VERSION}");
-        let width = Terminal::size()?.width as usize;
+        let width = Terminal::size()?.width;
         let len = welcome_message.len();
         let padding = (width - len) / 2;
         let spaces = " ".repeat(padding - 1);
