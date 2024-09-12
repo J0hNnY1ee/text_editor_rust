@@ -1,5 +1,4 @@
-use core::cmp::min;
-use crossterm::event::{read, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{read, Event, KeyEvent, KeyEventKind};
 use std::{
     env,
     io::Error,
@@ -9,7 +8,7 @@ mod editorcommand;
 mod terminal;
 mod view;
 use editorcommand::EditorCommand;
-use terminal::{Position, Size, Terminal};
+use terminal::Terminal;
 use view::View;
 
 #[derive(Default)]
