@@ -1,6 +1,9 @@
 use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::style::Print;
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode, size, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen};
+use crossterm::terminal::{
+    disable_raw_mode, enable_raw_mode, size, Clear, ClearType, EnterAlternateScreen,
+    LeaveAlternateScreen,
+};
 use crossterm::{queue, Command};
 use std::io::{stdout, Error, Write};
 
@@ -13,6 +16,15 @@ pub struct Size {
 pub struct Position {
     pub col: usize,
     pub row: usize,
+}
+
+impl Position {
+    pub const fn saturating_sub(self, other: Self) -> Self {
+        Self {
+            row: self.row.saturating_sub(other.row),
+            col: self.col.saturating_sub(other.col),
+        }
+    }
 }
 
 pub struct Terminal;

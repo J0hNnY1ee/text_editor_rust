@@ -1,21 +1,107 @@
-use std::{cmp, ops::Range};
+use std::ops::Range;
 
-pub struct Line {
-    string: String,
+// 引入 Rust 标准库中的 char, cmp, Range 和 result 模块。
+
+use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
+
+// 引入第三方库，用于处理 Unicode 文本的分割和宽度计算。
+
+#[derive(Clone, Copy)]
+// 定义一个可以克隆和复制的枚举类型 GraphemeWidth。
+enum GraphemeWidth {
+    Half, // 半宽字符
+    Full, // 全宽字符
 }
-impl Line {
-    pub fn from(line_str: &str) -> Self {
-        Self {
-            string: String::from(line_str),
+
+impl GraphemeWidth {
+    // 实现 GraphemeWidth 的方法，用于饱和加法。
+    const fn saturating_add(self, other: usize) -> usize {
+        match self {
+            Self::Full => other.saturating_add(1), // 全宽字符加1
+            Self::Half => other.saturating_add(2), // 半宽字符加2
         }
     }
+}
 
-    pub fn get(&self, range: Range<usize>) -> String {
-        let start = range.start;
-        let end = cmp::min(range.end, self.string.len());
-        self.string.get(start..end).unwrap_or_default().to_string()
+// 定义一个结构体 TextFragment，用于存储文本片段的信息。
+struct TextFragment {
+    grapheme: String,              // 文本片段
+    rendered_width: GraphemeWidth, // 渲染宽度
+    replacement: Option<char>,     // 替换字符
+}
+
+// 定义一个结构体 Line，用于存储一行文本的片段。
+pub struct Line {
+    fragments: Vec<TextFragment>, // 文本片段的向量
+}
+
+impl Line {
+    // 实现 Line 的方法，用于从字符串创建一个 Line 实例。
+    pub fn from(line_str: &str) -> Self {
+        let fragments = line_str
+            .graphemes(true) // 使用 Unicode 分割文本
+            .map(|grapheme| {
+                // 映射每个图元到 TextFragment
+                let unicode_width = grapheme.width(); // 获取宽度
+                let rendered_width = match unicode_width {
+                    0 | 1 => GraphemeWidth::Half, // 宽度为0或1的视为半宽
+                    _ => GraphemeWidth::Full,     // 其他视为全宽
+                };
+                let replacement = match unicode_width {
+                    0 => Some('·'), // 宽度为0的用'·'替换
+                    _ => None,      // 其他不替换
+                };
+                TextFragment {
+                    grapheme: grapheme.to_string(), // 转换为字符串
+                    rendered_width,                 // 渲染宽度
+                    replacement,                    // 替换字符
+                }
+            })
+            .collect();
+        Self { fragments } // 创建 Line 实例
     }
-    pub fn len(&self) -> usize {
-        self.string.len()
+
+    // 实现 Line 的方法，用于获取指定范围内的可见图元。
+    pub fn get_visible_graphemes(&self, range: Range<usize>) -> String {
+        if range.start >= range.end {
+            return String::new(); // 如果范围无效，返回空字符串
+        }
+
+        let mut result = String::new(); // 初始化结果字符串
+        let mut current_pos = 0; // 当前位置
+        for fragment in &self.fragments {
+            let fragment_end = fragment.rendered_width.saturating_add(current_pos); // 计算片段结束位置
+            if current_pos >= range.end {
+                break; // 如果当前位置超出范围，结束循环
+            }
+
+            if fragment_end >= range.start {
+                if fragment_end > range.end || current_pos < range.start {
+                    result.push('…'); // 如果片段超出范围，添加省略号
+                } else if let Some(char) = fragment.replacement {
+                    result.push(char); // 如果有替换字符，添加替换字符
+                } else {
+                    result.push_str(&fragment.grapheme); // 否则，添加图元
+                }
+            }
+            current_pos = fragment_end; // 更新当前位置
+        }
+        result // 返回结果字符串
+    }
+
+    // 实现 Line 的方法，用于计算直到指定图元索引的宽度。
+    pub fn width_until(&self, grapheme_index: usize) -> usize {
+        self.fragments
+            .iter() // 迭代片段
+            .take(grapheme_index) // 取到指定索引
+            .map(|fragment| match fragment.rendered_width {
+                GraphemeWidth::Full => 2, // 全宽字符宽度为2
+                GraphemeWidth::Half => 1, // 半宽字符宽度为1
+            })
+            .sum() // 计算总宽度
+    }
+    pub fn grapheme_count(&self) -> usize {
+        self.fragments.len()
     }
 }
