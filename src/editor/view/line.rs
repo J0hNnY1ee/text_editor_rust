@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::{char, ops::Range};
 
 // 引入 Rust 标准库中的 char, cmp, Range 和 result 模块。
 
@@ -43,15 +43,18 @@ impl Line {
             .graphemes(true) // 使用 Unicode 分割文本
             .map(|grapheme| {
                 // 映射每个图元到 TextFragment
-                let unicode_width = grapheme.width(); // 获取宽度
-                let rendered_width = match unicode_width {
-                    0 | 1 => GraphemeWidth::Half, // 宽度为0或1的视为半宽
-                    _ => GraphemeWidth::Full,     // 其他视为全宽
-                };
-                let replacement = match unicode_width {
-                    0 => Some('·'), // 宽度为0的用'·'替换
-                    _ => None,      // 其他不替换
-                };
+                let (replacement, rendered_width) = Self::replacement_character(grapheme)
+                    .map_or_else(
+                        || {
+                            let unicode_width = grapheme.width();
+                            let rendered_width = match unicode_width {
+                                0 | 1 => GraphemeWidth::Half,
+                                _ => GraphemeWidth::Full,
+                            };
+                            (None, rendered_width)
+                        },
+                        |replacement| (Some(replacement), GraphemeWidth::Half),
+                    );
                 TextFragment {
                     grapheme: grapheme.to_string(), // 转换为字符串
                     rendered_width,                 // 渲染宽度
@@ -103,5 +106,24 @@ impl Line {
     }
     pub fn grapheme_count(&self) -> usize {
         self.fragments.len()
+    }
+
+    fn replacement_character(for_str: &str) -> Option<char> {
+        let width = for_str.width();
+        match for_str {
+            " " => None,
+            "\t" => Some(' '),
+            _ if width > 0 && for_str.trim().is_empty() => Some('_'),
+            _ if width == 0 => {
+                let mut chars = for_str.chars();
+                if let Some(ch) = chars.next() {
+                    if ch.is_control() && chars.next().is_none() {
+                        return Some('▯');
+                    }
+                }
+                Some('·')
+            }
+            _ => None,
+        }
     }
 }
