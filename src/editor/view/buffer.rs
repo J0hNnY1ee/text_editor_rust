@@ -1,10 +1,14 @@
-use std::{fs::read_to_string, io::Error}; // 引入标准库中的 read_to_string 函数和 Error 类型。
-
+use std::{
+    fs::{read_to_string, File},
+    io::Error,
+}; // 引入标准库中的 read_to_string 函数和 Error 类型。
+use std::io::Write;
 use super::{line::Line, Location}; // 从当前模块的父模块中引入 Line 结构体。
 
 #[derive(Default)] // 标记 Buffer 结构体可以使用 Default trait 来生成默认实例。
 pub struct Buffer {
     pub lines: Vec<Line>, // Buffer 包含一个 Line 类型的向量，表示文本的每一行。
+    file_name: Option<String>,
 }
 
 impl Buffer {
@@ -17,9 +21,21 @@ impl Buffer {
             // 遍历文件的每一行。
             lines.push(Line::from(value)) // 将每行文本转换为 Line 实例并添加到向量中。
         }
-        Ok(Self { lines }) // 如果成功，返回包含所有 Line 实例的 Buffer 实例。
+        Ok(Self {
+            lines,
+            file_name: Some(file_name.to_string()),
+        }) // 如果成功，返回包含所有 Line 实例的 Buffer 实例。
     }
 
+    pub fn save(&self) -> Result<(), Error> {
+        if let Some(file_name) = &self.file_name {
+            let mut file = File::create(file_name)?;
+            for line in &self.lines {
+                writeln!(file, "{line}")?;
+            }
+        }
+        Ok(())
+    }
     pub fn is_empty(&self) -> bool {
         // 定义一个方法，用于检查 Buffer 是否为空。
         self.lines.is_empty() // 如果 lines 向量为空，则返回 true。
