@@ -39,8 +39,9 @@ impl View {
             EditorCommand::Move(direction) => self.move_text_location(&direction),
             EditorCommand::Quit => {}
             EditorCommand::Insert(character) => self.insert_char(character),
-            EditorCommand::BackSpace => self.backspace(),
+            EditorCommand::BackSpace => self.delete_backward(),
             EditorCommand::Delete => self.delete(),
+            EditorCommand::Enter => self.insert_newline(),
         }
     }
 
@@ -266,13 +267,19 @@ impl View {
         }
         self.needs_redraw = true;
     }
-    fn backspace(&mut self) {
+    fn delete_backward(&mut self) {
         if self.text_location.line_index != 0 || self.text_location.grapheme_index != 0
         {
             self.move_text_location(&Direction::Left);
             self.delete();
         }
 
+    }
+    fn insert_newline(&mut self)
+    {
+        self.buffer.insert_newline(self.text_location);
+        self.move_text_location(&Direction::Right);
+        self.needs_redraw = true;
     }
     fn delete(&mut self) {
         self.buffer.delete(self.text_location);

@@ -32,6 +32,7 @@ struct TextFragment {
 }
 
 // 定义一个结构体 Line，用于存储一行文本的片段。
+#[derive(Default)]
 pub struct Line {
     fragments: Vec<TextFragment>, // 文本片段的向量
 }
@@ -157,6 +158,17 @@ impl Line {
         let mut concat = self.to_string();
         concat.push_str(&other.to_string());
         self.fragments = Self::str_to_fragments(&concat);
+    }
+
+    pub  fn split(&mut self,at:usize) -> Self
+    {
+        if at > self.fragments.len(){
+            return Self::default();
+        }
+        let remainder = self.fragments.split_off(at);
+        Self{
+            fragments:remainder
+        }
     }
 }
 

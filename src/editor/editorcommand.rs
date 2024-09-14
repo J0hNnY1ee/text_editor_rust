@@ -26,6 +26,7 @@ pub enum EditorCommand {
     Insert(char),
     BackSpace,
     Delete,
+    Enter,
 }
 
 // 定义一个枚举 EditorCommand，表示编辑器可以执行的命令。
@@ -43,8 +44,8 @@ impl TryFrom<Event> for EditorCommand {
                 code, modifiers, ..
             }) => match (code, modifiers) {
                 // 匹配键盘事件，根据按键代码和修饰键确定具体操作。
-                (KeyCode::Char('q'), KeyModifiers::CONTROL) => Ok(Self::Quit),
-                // 如果是 Ctrl+Q，返回退出命令。
+                (KeyCode::Char('d'), KeyModifiers::CONTROL) => Ok(Self::Quit),
+                // 如果是 Ctrl+D，返回退出命令。
                 (KeyCode::Char(character), KeyModifiers::NONE | KeyModifiers::SHIFT) => {
                     Ok(Self::Insert(character))
                 }
@@ -65,6 +66,8 @@ impl TryFrom<Event> for EditorCommand {
                 (KeyCode::End, _) => Ok(Self::Move(Direction::End)),
                 (KeyCode::Backspace, _) => Ok(Self::BackSpace),
                 (KeyCode::Delete, _) => Ok(Self::Delete),
+                (KeyCode::Enter, _) => Ok(Self::Enter),
+                (KeyCode::Tab, _) => Ok(Self::Insert('\t')),
                 // 如果是 End 键，返回 End 移动命令。
                 _ => Err(format!("Key Code not supported: {code:?}")),
                 // 如果按键不被支持，返回错误。
