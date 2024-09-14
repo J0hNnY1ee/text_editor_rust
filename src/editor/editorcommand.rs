@@ -24,6 +24,8 @@ pub enum EditorCommand {
     Resize(Size),
     Quit,
     Insert(char),
+    BackSpace,
+    Delete,
 }
 
 // 定义一个枚举 EditorCommand，表示编辑器可以执行的命令。
@@ -61,6 +63,8 @@ impl TryFrom<Event> for EditorCommand {
                 (KeyCode::Home, _) => Ok(Self::Move(Direction::Home)),
                 // 如果是 Home 键，返回 Home 移动命令。
                 (KeyCode::End, _) => Ok(Self::Move(Direction::End)),
+                (KeyCode::Backspace, _) => Ok(Self::BackSpace),
+                (KeyCode::Delete, _) => Ok(Self::Delete),
                 // 如果是 End 键，返回 End 移动命令。
                 _ => Err(format!("Key Code not supported: {code:?}")),
                 // 如果按键不被支持，返回错误。

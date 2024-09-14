@@ -37,8 +37,10 @@ impl View {
         match command {
             EditorCommand::Resize(size) => self.resize(size),
             EditorCommand::Move(direction) => self.move_text_location(&direction),
-            EditorCommand::Quit => {},
+            EditorCommand::Quit => {}
             EditorCommand::Insert(character) => self.insert_char(character),
+            EditorCommand::BackSpace => self.backspace(),
+            EditorCommand::Delete => self.delete(),
         }
     }
 
@@ -186,7 +188,7 @@ impl View {
         // 向左移动文本位置。
         if self.text_location.grapheme_index > 0 {
             self.text_location.grapheme_index -= 1;
-        } else {
+        } else if self.text_location.line_index > 0 {
             self.move_up(1);
             self.move_to_end_of_line();
         }
@@ -262,6 +264,14 @@ impl View {
         if grapheme_delta > 0 {
             self.move_right();
         }
+        self.needs_redraw = true;
+    }
+    fn backspace(&mut self) {
+        self.move_left();
+        self.delete();
+    }
+    fn delete(&mut self) {
+        self.buffer.delete(self.text_location);
         self.needs_redraw = true;
     }
 }
