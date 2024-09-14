@@ -1,6 +1,6 @@
 use std::{fs::read_to_string, io::Error}; // 引入标准库中的 read_to_string 函数和 Error 类型。
 
-use super::line::Line; // 从当前模块的父模块中引入 Line 结构体。
+use super::{line::Line, Location}; // 从当前模块的父模块中引入 Line 结构体。
 
 #[derive(Default)] // 标记 Buffer 结构体可以使用 Default trait 来生成默认实例。
 pub struct Buffer {
@@ -13,7 +13,8 @@ impl Buffer {
         // 定义一个加载文件内容并创建 Buffer 实例的方法。
         let contents = read_to_string(file_name)?; // 读取文件内容，如果出错则返回错误。
         let mut lines = Vec::new(); // 创建一个用于存储 Line 实例的向量。
-        for value in contents.lines() { // 遍历文件的每一行。
+        for value in contents.lines() {
+            // 遍历文件的每一行。
             lines.push(Line::from(value)) // 将每行文本转换为 Line 实例并添加到向量中。
         }
         Ok(Self { lines }) // 如果成功，返回包含所有 Line 实例的 Buffer 实例。
@@ -27,5 +28,16 @@ impl Buffer {
     pub fn height(&self) -> usize {
         // 定义一个方法，用于获取 Buffer 的“高度”，即行数。
         self.lines.len() // 返回 lines 向量的长度，即行数。
+    }
+
+    pub fn insert_char(&mut self, character: char, at: Location) {
+        if at.line_index > self.lines.len() {
+            return;
+        }
+        if at.line_index == self.lines.len() {
+            self.lines.push(Line::from(&character.to_string()));
+        } else if let Some(line) = self.lines.get_mut(at.line_index) {
+            line.insert_char(character, at.grapheme_index);
+        }
     }
 }

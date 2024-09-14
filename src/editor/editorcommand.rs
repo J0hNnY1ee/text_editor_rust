@@ -23,6 +23,7 @@ pub enum EditorCommand {
     Move(Direction),
     Resize(Size),
     Quit,
+    Insert(char),
 }
 
 // 定义一个枚举 EditorCommand，表示编辑器可以执行的命令。
@@ -42,6 +43,9 @@ impl TryFrom<Event> for EditorCommand {
                 // 匹配键盘事件，根据按键代码和修饰键确定具体操作。
                 (KeyCode::Char('q'), KeyModifiers::CONTROL) => Ok(Self::Quit),
                 // 如果是 Ctrl+Q，返回退出命令。
+                (KeyCode::Char(character), KeyModifiers::NONE | KeyModifiers::SHIFT) => {
+                    Ok(Self::Insert(character))
+                }
                 (KeyCode::Up, _) => Ok(Self::Move(Direction::Up)),
                 // 如果是向上箭头键，返回向上移动命令。
                 (KeyCode::Down, _) => Ok(Self::Move(Direction::Down)),
@@ -61,19 +65,10 @@ impl TryFrom<Event> for EditorCommand {
                 _ => Err(format!("Key Code not supported: {code:?}")),
                 // 如果按键不被支持，返回错误。
             },
-            Event::Resize(width_u16, height_u16) => {
-                // 处理终端尺寸变化事件。
-                // clippy::as_conversions: Will run into problems for rare edge case systems where usize < u16
-                #[allow(clippy::as_conversions)]
-                let height = height_u16 as usize;
-                // 将 u16 类型的 height 转换为 usize 类型。
-                // clippy::as_conversions: Will run into problems for rare edge case systems where usize < u16
-                #[allow(clippy::as_conversions)]
-                let width = width_u16 as usize;
-                // 将 u16 类型的 width 转换为 usize 类型。
-                Ok(Self::Resize(Size { height, width }))
-                // 返回调整大小命令。
-            }
+            Event::Resize(width_u16, height_u16) => Ok(Self::Resize(Size {
+                height: height_u16 as usize,
+                width: width_u16 as usize,
+            })),
             _ => Err(format!("Event not supported: {event:?}")),
             // 如果事件不被支持，返回错误。
         }

@@ -39,7 +39,11 @@ pub struct Line {
 impl Line {
     // 实现 Line 的方法，用于从字符串创建一个 Line 实例。
     pub fn from(line_str: &str) -> Self {
-        let fragments = line_str
+        let fragments = Self::str_to_fragments(line_str);
+        Self { fragments }
+    }
+    fn str_to_fragments(line_str: &str) -> Vec<TextFragment> {
+        line_str
             .graphemes(true) // 使用 Unicode 分割文本
             .map(|grapheme| {
                 // 映射每个图元到 TextFragment
@@ -61,8 +65,7 @@ impl Line {
                     replacement,                    // 替换字符
                 }
             })
-            .collect();
-        Self { fragments } // 创建 Line 实例
+            .collect()
     }
 
     // 实现 Line 的方法，用于获取指定范围内的可见图元。
@@ -125,5 +128,22 @@ impl Line {
             }
             _ => None,
         }
+    }
+    pub fn insert_char(&mut self,character:char,grapheme_index: usize)
+    {
+        let mut result = String::new();
+        for(index,fragment) in self.fragments.iter().enumerate()
+        {
+            if index== grapheme_index
+            {
+                result.push(character);
+            }
+            result.push_str(&fragment.grapheme);
+        }
+        if grapheme_index >= self.fragments.len()
+        {
+            result.push(character);
+        }
+        self.fragments = Self::str_to_fragments(&result);
     }
 }

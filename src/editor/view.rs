@@ -16,17 +16,17 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[derive(Clone, Copy, Default)]
 pub struct Location {
     pub grapheme_index: usize, // 字形索引，用于在行内定位字符。
-    pub line_index: usize,      // 行索引，用于在缓冲区中定位行。
+    pub line_index: usize,     // 行索引，用于在缓冲区中定位行。
 }
 
 // 定义 Location 结构体，用于跟踪文本位置。
 
 pub struct View {
-    buffer: Buffer,             // 缓冲区，存储文本数据。
-    needs_redraw: bool,         // 是否需要重绘视图。
-    size: Size,                 // 视图的尺寸。
-    text_location: Location,    // 文本的位置。
-    scroll_offset: Position,    // 滚动偏移量。
+    buffer: Buffer,          // 缓冲区，存储文本数据。
+    needs_redraw: bool,      // 是否需要重绘视图。
+    size: Size,              // 视图的尺寸。
+    text_location: Location, // 文本的位置。
+    scroll_offset: Position, // 滚动偏移量。
 }
 
 // 定义 View 结构体，表示文本编辑器的视图。
@@ -37,7 +37,8 @@ impl View {
         match command {
             EditorCommand::Resize(size) => self.resize(size),
             EditorCommand::Move(direction) => self.move_text_location(&direction),
-            EditorCommand::Quit => {}
+            EditorCommand::Quit => {},
+            EditorCommand::Insert(character) => self.insert_char(character),
         }
     }
 
@@ -244,6 +245,25 @@ impl View {
         let result = Terminal::print_row(at, line_text);
         debug_assert!(result.is_ok(), "Failed to render line");
     }
+    fn insert_char(&mut self, character: char) {
+        let old_len = self
+            .buffer
+            .lines
+            .get(self.text_location.line_index)
+            .map_or(0, Line::grapheme_count);
+        self.buffer.insert_char(character, self.text_location);
+
+        let new_len = self
+            .buffer
+            .lines
+            .get(self.text_location.line_index)
+            .map_or(0, Line::grapheme_count);
+        let grapheme_delta = new_len.saturating_sub(old_len);
+        if grapheme_delta > 0 {
+            self.move_right();
+        }
+        self.needs_redraw = true;
+    }
 }
 
 // 实现 View 的默认构造函数。
@@ -251,11 +271,10 @@ impl Default for View {
     fn default() -> Self {
         Self {
             buffer: Buffer::default(), // 使用 Buffer 的默认值初始化 buffer。
-            needs_redraw: true, // 默认需要重绘。
+            needs_redraw: true,        // 默认需要重绘。
             size: Terminal::size().unwrap_or_default(), // 获取终端尺寸，如果失败则使用默认值。
             text_location: Location::default(), // 使用 Location 的默认值初始化 text_location。
             scroll_offset: Position::default(), // 使用 Position 的默认值初始化 scroll_offset。
         }
     }
 }
-   
