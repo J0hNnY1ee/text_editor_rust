@@ -1,4 +1,4 @@
-use std::{char, ops::Range};
+use std::{char, fmt, ops::Range};
 
 // 引入 Rust 标准库中的 char, cmp, Range 和 result 模块。
 
@@ -129,34 +129,44 @@ impl Line {
             _ => None,
         }
     }
-    pub fn insert_char(&mut self,character:char,grapheme_index: usize)
-    {
+    pub fn insert_char(&mut self, character: char, grapheme_index: usize) {
         let mut result = String::new();
-        for(index,fragment) in self.fragments.iter().enumerate()
-        {
-            if index== grapheme_index
-            {
+        for (index, fragment) in self.fragments.iter().enumerate() {
+            if index == grapheme_index {
                 result.push(character);
             }
             result.push_str(&fragment.grapheme);
         }
-        if grapheme_index >= self.fragments.len()
-        {
+        if grapheme_index >= self.fragments.len() {
             result.push(character);
         }
         self.fragments = Self::str_to_fragments(&result);
     }
-    pub fn delete(&mut self,grapheme_index: usize)
-    {
+    pub fn delete(&mut self, grapheme_index: usize) {
         let mut result = String::new();
 
-        for(index,fragment) in self.fragments.iter().enumerate()
-        {
-            if index != grapheme_index
-            {
+        for (index, fragment) in self.fragments.iter().enumerate() {
+            if index != grapheme_index {
                 result.push_str(&fragment.grapheme);
             }
         }
         self.fragments = Self::str_to_fragments(&result);
+    }
+
+    pub fn append(&mut self, other: &Self) {
+        let mut concat = self.to_string();
+        concat.push_str(&other.to_string());
+        self.fragments = Self::str_to_fragments(&concat);
+    }
+}
+
+impl fmt::Display for Line {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let result: String = self
+            .fragments
+            .iter()
+            .map(|fragment| fragment.grapheme.clone())
+            .collect();
+        write!(f, "{result}")
     }
 }
