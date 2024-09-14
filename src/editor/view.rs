@@ -3,6 +3,7 @@ use std::cmp::min;
 use super::{
     editorcommand::{Direction, EditorCommand},
     terminal::{Position, Size, Terminal},
+    DocumentStates,
 };
 mod buffer;
 mod line;
@@ -36,7 +37,7 @@ impl View {
         // 处理编辑器命令。
         match command {
             EditorCommand::Resize(size) => self.resize(size),
-            EditorCommand::Move(direction) => self.move_text_location(&direction),
+            EditorCommand::Move(direction) => self.move_text_location(direction),
             EditorCommand::Quit => {}
             EditorCommand::Insert(character) => self.insert_char(character),
             EditorCommand::BackSpace => self.delete_backward(),
@@ -144,7 +145,7 @@ impl View {
         Position { col, row }
     }
 
-    fn move_text_location(&mut self, direction: &Direction) {
+    fn move_text_location(&mut self, direction: Direction) {
         // 根据方向移动文本位置。
         let Size { height, .. } = self.size;
 
@@ -273,30 +274,38 @@ impl View {
     }
     fn delete_backward(&mut self) {
         if self.text_location.line_index != 0 || self.text_location.grapheme_index != 0 {
-            self.move_text_location(&Direction::Left);
+            self.move_text_location(Direction::Left);
             self.delete();
         }
     }
     fn insert_newline(&mut self) {
         self.buffer.insert_newline(self.text_location);
-        self.move_text_location(&Direction::Right);
+        self.move_text_location(Direction::Right);
         self.needs_redraw = true;
     }
     fn delete(&mut self) {
         self.buffer.delete(self.text_location);
         self.needs_redraw = true;
     }
-}
-
-// 实现 View 的默认构造函数。
-impl Default for View {
-    fn default() -> Self {
+    pub fn new(margin_bottom: usize) -> Self {
+        let terminal_size = Terminal::size().unwrap_or_default();
         Self {
-            buffer: Buffer::default(), // 使用 Buffer 的默认值初始化 buffer。
-            needs_redraw: true,        // 默认需要重绘。
-            size: Terminal::size().unwrap_or_default(), // 获取终端尺寸，如果失败则使用默认值。
-            text_location: Location::default(), // 使用 Location 的默认值初始化 text_location。
-            scroll_offset: Position::default(), // 使用 Position 的默认值初始化 scroll_offset。
+            buffer: Buffer::default(),
+            needs_redraw: true,
+            size: Size {
+                width: terminal_size.width,
+                height: terminal_size.height.saturating_sub(margin_bottom),
+            },
+            text_location: Location::default(),
+            scroll_offset: Position::default(),
+        }
+    }
+    pub fn get_status(&self) -> DocumentStates {
+        DocumentStates {
+            total_lines: self.buffer.height(),
+            current_line_index: self.text_location.line_index,
+            file_name: self.buffer.file_name.clone(),
+            is_modified: self.buffer.dirty,
         }
     }
 }

@@ -1,10 +1,12 @@
 use crossterm::event::{read, Event, KeyEvent, KeyEventKind};
+use statusbar::StatusBus;
 use std::{
     env,
     io::Error,
     panic::{set_hook, take_hook},
 };
 mod editorcommand;
+mod statusbar;
 mod terminal;
 mod view;
 use editorcommand::EditorCommand;
@@ -12,11 +14,18 @@ use terminal::Terminal;
 use view::View;
 
 // 引入必要的模块和类型，包括跨平台的终端处理库 crossterm 和标准库中的模块。
+#[derive(Default, PartialEq, Eq, Debug)]
+pub struct DocumentStates {
+    total_lines: usize,
+    current_line_index: usize,
+    is_modified: bool,
+    file_name: Option<String>,
+}
 
-#[derive(Default)]
 pub struct Editor {
     should_quit: bool, // 控制编辑器是否应该退出的布尔值。
     view: View,        // 编辑器的视图组件。
+    status_bar: StatusBus,
 }
 
 // 定义 Editor 结构体，并为其实现 Default trait，以便可以创建默认实例。
@@ -30,7 +39,7 @@ impl Editor {
             current_hook(panic_info); // 调用之前的 panic 钩子。
         }));
         Terminal::initialize()?; // 初始化终端。
-        let mut view = View::default(); // 创建默认的视图实例。
+        let mut view = View::new(2); // 创建默认的视图实例。
         let args: Vec<String> = env::args().collect(); // 获取命令行参数。
         if let Some(file_name) = args.get(1) {
             // 如果有第二个参数，视为文件名。
@@ -39,6 +48,7 @@ impl Editor {
         Ok(Self {
             should_quit: false, // 初始时不退出。
             view,
+            status_bar: StatusBus::new(1),
         })
     }
     // 实现一个新的方法，用于创建编辑器实例。
@@ -59,6 +69,9 @@ impl Editor {
                     panic!("Could not read event: {err:?}");
                 }
             }
+
+            let status = self.view.get_status();
+            self.status_bar.update_status(status);
         }
     }
 
@@ -78,8 +91,10 @@ impl Editor {
                     // 如果命令是退出。
                     self.should_quit = true; // 设置 should_quit 为 true。
                 } else {
-                    // 否则，处理命令。
                     self.view.handle_command(command);
+                    if let EditorCommand::Resize(size) = command {
+                        self.status_bar.resize(size)
+                    }
                 }
             }
         }
@@ -90,6 +105,7 @@ impl Editor {
     fn refresh_screen(&mut self) {
         let _ = Terminal::hide_caret(); // 隐藏光标。
         self.view.render(); // 渲染视图。
+        self.status_bar.render();
         let _ = Terminal::move_caret_to(self.view.caret_position()); // 移动光标到当前位置。
         let _ = Terminal::show_caret(); // 显示光标。
         let _ = Terminal::execute(); // 执行终端命令。

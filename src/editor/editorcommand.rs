@@ -5,7 +5,7 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use super::terminal::Size;
 
 // 从父模块中的 terminal 模块引入 Size 类型。
-
+#[derive(Clone, Copy)]
 pub enum Direction {
     PageUp,
     PageDown,
@@ -18,7 +18,7 @@ pub enum Direction {
 }
 
 // 定义一个枚举 Direction，表示编辑器中的导航方向。
-
+#[derive(Clone, Copy)]
 pub enum EditorCommand {
     Move(Direction),
     Resize(Size),

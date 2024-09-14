@@ -1,14 +1,15 @@
+use super::{line::Line, Location};
+use std::io::Write;
 use std::{
     fs::{read_to_string, File},
     io::Error,
-}; // 引入标准库中的 read_to_string 函数和 Error 类型。
-use std::io::Write;
-use super::{line::Line, Location}; // 从当前模块的父模块中引入 Line 结构体。
+}; // 引入标准库中的 read_to_string 函数和 Error 类型。 // 从当前模块的父模块中引入 Line 结构体。
 
 #[derive(Default)] // 标记 Buffer 结构体可以使用 Default trait 来生成默认实例。
 pub struct Buffer {
     pub lines: Vec<Line>, // Buffer 包含一个 Line 类型的向量，表示文本的每一行。
-    file_name: Option<String>,
+    pub file_name: Option<String>,
+    pub dirty: bool,
 }
 
 impl Buffer {
@@ -24,15 +25,17 @@ impl Buffer {
         Ok(Self {
             lines,
             file_name: Some(file_name.to_string()),
+            dirty: false,
         }) // 如果成功，返回包含所有 Line 实例的 Buffer 实例。
     }
 
-    pub fn save(&self) -> Result<(), Error> {
+    pub fn save(&mut self) -> Result<(), Error> {
         if let Some(file_name) = &self.file_name {
             let mut file = File::create(file_name)?;
             for line in &self.lines {
                 writeln!(file, "{line}")?;
             }
+            self.dirty = false;
         }
         Ok(())
     }
@@ -51,8 +54,10 @@ impl Buffer {
             return;
         }
         if at.line_index == self.height() {
+            self.dirty = true;
             self.lines.push(Line::from(&character.to_string()));
         } else if let Some(line) = self.lines.get_mut(at.line_index) {
+            self.dirty = true;
             line.insert_char(character, at.grapheme_index);
         }
     }
@@ -64,7 +69,9 @@ impl Buffer {
                 let next_line = self.lines.remove(at.line_index.saturating_add(1));
 
                 self.lines[at.line_index].append(&next_line);
+                self.dirty = true;
             } else if at.grapheme_index < line.grapheme_count() {
+                self.dirty = true;
                 self.lines[at.line_index].delete(at.grapheme_index);
             }
         }
@@ -73,8 +80,10 @@ impl Buffer {
     pub fn insert_newline(&mut self, at: Location) {
         if at.line_index == self.height() {
             self.lines.push(Line::default());
+            self.dirty = true;
         } else if let Some(line) = self.lines.get_mut(at.line_index) {
             let new = line.split(at.grapheme_index);
+            self.dirty = true;
             self.lines.insert(at.line_index.saturating_add(1), new)
         }
     }
