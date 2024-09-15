@@ -1,13 +1,21 @@
+use self::{
+    command::{
+        Command::{self, Edit, Move, System},
+        System::{Quit, Resize, Save},
+    },
+    messagebar::MessageBar,
+    terminal::Size,
+};
 use crossterm::event::{read, Event, KeyEvent, KeyEventKind};
-use messagebar::MessageBar;
 use std::{
     env,
     io::Error,
     panic::{set_hook, take_hook},
 };
+use terminal::Terminal;
 use uicomponent::UIComponent;
+mod command;
 mod documentstatus;
-mod editorcommand;
 mod fileinfo;
 mod messagebar;
 mod statusbar;
@@ -15,12 +23,11 @@ mod terminal;
 mod uicomponent;
 mod view;
 use documentstatus::DocumentStatus;
-use editorcommand::EditorCommand;
 use statusbar::StatusBar;
-use terminal::{Size, Terminal};
 use view::View;
 pub const NAME: &str = env!("CARGO_PKG_NAME");
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+const QUIT_TIMES: u8 = 3;
 #[derive(Default)]
 pub struct Editor {
     should_quit: bool,
@@ -29,6 +36,7 @@ pub struct Editor {
     message_bar: MessageBar,
     terminal_size: Size,
     title: String,
+    quit_times: u8,
 }
 
 impl Editor {
@@ -46,11 +54,13 @@ impl Editor {
 
         let args: Vec<String> = env::args().collect();
         if let Some(file_name) = args.get(1) {
-            editor.view.load(file_name);
+            if editor.view.load(file_name).is_err() {
+                editor
+                    .message_bar
+                    .update_message(&format!("ERR: Could not open file: {file_name}"));
+            }
         }
-        editor
-            .message_bar
-            .update_message("HELP: Ctrl-S = save | Ctrl-D = quit".to_string());
+
         editor.refresh_status();
         Ok(editor)
     }
@@ -110,15 +120,50 @@ impl Editor {
         };
 
         if should_process {
-            if let Ok(command) = EditorCommand::try_from(event) {
-                if matches!(command, EditorCommand::Quit) {
-                    self.should_quit = true;
-                } else if let EditorCommand::Resize(size) = command {
-                    self.resize(size);
-                } else {
-                    self.view.handle_command(command);
-                }
+            if let Ok(command) = Command::try_from(event) {
+                self.process_command(command);
             }
+        }
+    }
+
+    fn process_command(&mut self, command: Command) {
+        match command {
+            System(Quit) => self.handle_quit(),
+            System(Resize(size)) => self.resize(size),
+            _ => self.reset_quit_times(), // Reset quit times for all other commands
+        }
+
+        match command {
+            System(Quit | Resize(_)) => {} // already handled above
+            System(Save) => self.handle_save(),
+            Edit(edit_command) => self.view.handle_edit_command(edit_command),
+            Move(move_command) => self.view.handle_move_command(move_command),
+        }
+    }
+    fn handle_save(&mut self) {
+        if self.view.save().is_ok() {
+            self.message_bar.update_message("File saved successfully.");
+        } else {
+            self.message_bar.update_message("Error writing file!");
+        }
+    }
+
+    fn handle_quit(&mut self) {
+        if !self.view.get_status().is_modified || self.quit_times + 1 == QUIT_TIMES {
+            self.should_quit = true;
+        } else if self.view.get_status().is_modified {
+            self.message_bar.update_message(&format!(
+                "WARNING! File has unsaved changes. Press Ctrl-D {} more times to quit.",
+                QUIT_TIMES - self.quit_times - 1
+            ));
+            self.quit_times += 1;
+        }
+    }
+
+    fn reset_quit_times(&mut self) {
+        if self.quit_times > 0 {
+            self.quit_times = 0;
+            self.message_bar.update_message("")
         }
     }
     fn refresh_screen(&mut self) {
