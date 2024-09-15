@@ -1,75 +1,142 @@
 use std::cmp::min;
 
+use self::line::Line;
+
 use super::{
     editorcommand::{Direction, EditorCommand},
     terminal::{Position, Size, Terminal},
-    DocumentStates,
+    DocumentStatus, NAME, VERSION,
 };
 mod buffer;
-mod line;
 use buffer::Buffer;
-use line::Line;
-const NAME: &str = env!("CARGO_PKG_NAME");
-const VERSION: &str = env!("CARGO_PKG_VERSION");
+mod line;
 
-// 引入必要的模块和类型，使用宏 env! 来获取当前 Cargo 包的名称和版本。
-
-#[derive(Clone, Copy, Default)]
+#[derive(Copy, Clone, Default)]
 pub struct Location {
-    pub grapheme_index: usize, // 字形索引，用于在行内定位字符。
-    pub line_index: usize,     // 行索引，用于在缓冲区中定位行。
+    pub grapheme_index: usize,
+    pub line_index: usize,
 }
-
-// 定义 Location 结构体，用于跟踪文本位置。
-
 pub struct View {
-    buffer: Buffer,          // 缓冲区，存储文本数据。
-    needs_redraw: bool,      // 是否需要重绘视图。
-    size: Size,              // 视图的尺寸。
-    text_location: Location, // 文本的位置。
-    scroll_offset: Position, // 滚动偏移量。
+    buffer: Buffer,
+    needs_redraw: bool,
+    size: Size,
+    margin_bottom: usize,
+    text_location: Location,
+    scroll_offset: Position,
 }
-
-// 定义 View 结构体，表示文本编辑器的视图。
 
 impl View {
-    pub fn handle_command(&mut self, command: EditorCommand) {
-        // 处理编辑器命令。
-        match command {
-            EditorCommand::Resize(size) => self.resize(size),
-            EditorCommand::Move(direction) => self.move_text_location(direction),
-            EditorCommand::Quit => {}
-            EditorCommand::Insert(character) => self.insert_char(character),
-            EditorCommand::BackSpace => self.delete_backward(),
-            EditorCommand::Delete => self.delete(),
-            EditorCommand::Enter => self.insert_newline(),
-            EditorCommand::Save => self.save(),
+    pub fn new(margin_bottom: usize) -> Self {
+        let terminal_size = Terminal::size().unwrap_or_default();
+        Self {
+            buffer: Buffer::default(),
+            needs_redraw: true,
+            size: Size {
+                width: terminal_size.width,
+                height: terminal_size.height.saturating_sub(margin_bottom),
+            },
+            margin_bottom,
+            text_location: Location::default(),
+            scroll_offset: Position::default(),
         }
     }
 
-    // 根据命令调整视图状态。
+    pub fn get_status(&self) -> DocumentStatus {
+        DocumentStatus {
+            total_lines: self.buffer.height(),
+            current_line_index: self.text_location.line_index,
+            file_name: format!("{}", self.buffer.file_info),
+            is_modified: self.buffer.dirty,
+        }
+    }
 
+    
     pub fn load(&mut self, file_name: &str) {
-        // 加载文件到缓冲区。
         if let Ok(buffer) = Buffer::load(file_name) {
             self.buffer = buffer;
             self.needs_redraw = true;
         }
     }
+
     fn save(&mut self) {
         let _ = self.buffer.save();
     }
 
+    
+
+    
+    pub fn handle_command(&mut self, command: EditorCommand) {
+        match command {
+            EditorCommand::Resize(size) => self.resize(size),
+            EditorCommand::Move(direction) => self.move_text_location(direction),
+            EditorCommand::Quit => {}
+            EditorCommand::Insert(character) => self.insert_char(character),
+            EditorCommand::Delete => self.delete(),
+            EditorCommand::Backspace => self.delete_backward(),
+            EditorCommand::Enter => self.insert_newline(),
+            EditorCommand::Save => self.save(),
+        }
+    }
+
+    fn resize(&mut self, to: Size) {
+        self.size = Size {
+            width: to.width,
+            height: to.height.saturating_sub(self.margin_bottom),
+        };
+        self.scroll_text_location_into_view();
+        self.needs_redraw = true;
+    }
+    
+    
+    fn insert_newline(&mut self) {
+        self.buffer.insert_newline(self.text_location);
+        self.move_text_location(Direction::Right);
+        self.needs_redraw = true;
+    }
+    fn delete_backward(&mut self) {
+        if self.text_location.line_index != 0 || self.text_location.grapheme_index != 0 {
+            self.move_text_location(Direction::Left);
+            self.delete();
+        }
+    }
+    fn delete(&mut self) {
+        self.buffer.delete(self.text_location);
+        self.needs_redraw = true;
+    }
+    fn insert_char(&mut self, character: char) {
+        let old_len = self
+            .buffer
+            .lines
+            .get(self.text_location.line_index)
+            .map_or(0, Line::grapheme_count);
+        self.buffer.insert_char(character, self.text_location);
+        let new_len = self
+            .buffer
+            .lines
+            .get(self.text_location.line_index)
+            .map_or(0, Line::grapheme_count);
+        let grapheme_delta = new_len.saturating_sub(old_len);
+        if grapheme_delta > 0 {
+            
+            self.move_text_location(Direction::Right);
+        }
+        self.needs_redraw = true;
+    }
+    
+
+    
+
     pub fn render(&mut self) {
-        // 渲染视图。
-        if !self.needs_redraw {
+        if !self.needs_redraw || self.size.height == 0 {
             return;
         }
         let Size { height, width } = self.size;
         if height == 0 || width == 0 {
             return;
         }
-
+        
+        
+        #[allow(clippy::integer_division)]
         let vertical_center = height / 3;
         let top = self.scroll_offset.row;
         for current_row in 0..height {
@@ -82,19 +149,32 @@ impl View {
             } else {
                 Self::render_line(current_row, "~");
             }
-            self.needs_redraw = false;
         }
+        self.needs_redraw = false;
     }
 
-    fn resize(&mut self, to: Size) {
-        // 调整视图尺寸。
-        self.size = to;
-        self.scroll_text_location_into_view();
-        self.needs_redraw = true;
+    fn render_line(at: usize, line_text: &str) {
+        let result = Terminal::print_row(at, line_text);
+        debug_assert!(result.is_ok(), "Failed to render line");
     }
+    fn build_welcome_message(width: usize) -> String {
+        if width == 0 {
+            return String::new();
+        }
+        let welcome_message = format!("{NAME} editor -- version {VERSION}");
+        let len = welcome_message.len();
+        let remaining_width = width.saturating_sub(1);
+        
+        if remaining_width < len {
+            return "~".to_string();
+        }
+        format!("{:<1}{:^remaining_width$}", "~", welcome_message)
+    }
+    
+
+    
 
     fn scroll_vertically(&mut self, to: usize) {
-        // 垂直滚动视图。
         let Size { height, .. } = self.size;
         let offset_changed = if to < self.scroll_offset.row {
             self.scroll_offset.row = to;
@@ -105,11 +185,11 @@ impl View {
         } else {
             false
         };
-        self.needs_redraw = self.needs_redraw || offset_changed;
+        if offset_changed {
+            self.needs_redraw = true;
+        }
     }
-
     fn scroll_horizontally(&mut self, to: usize) {
-        // 水平滚动视图。
         let Size { width, .. } = self.size;
         let offset_changed = if to < self.scroll_offset.col {
             self.scroll_offset.col = to;
@@ -120,24 +200,26 @@ impl View {
         } else {
             false
         };
-        self.needs_redraw = self.needs_redraw || offset_changed;
+        if offset_changed {
+            self.needs_redraw = true;
+        }
     }
-
     fn scroll_text_location_into_view(&mut self) {
-        // 确保文本位置在视图内。
         let Position { row, col } = self.text_location_to_position();
         self.scroll_vertically(row);
         self.scroll_horizontally(col);
     }
 
+    
+
+    
+
     pub fn caret_position(&self) -> Position {
-        // 获取光标位置。
         self.text_location_to_position()
             .saturating_sub(self.scroll_offset)
     }
 
     fn text_location_to_position(&self) -> Position {
-        // 将文本位置转换为屏幕位置。
         let row = self.text_location.line_index;
         let col = self.buffer.lines.get(row).map_or(0, |line| {
             line.width_until(self.text_location.grapheme_index)
@@ -145,10 +227,14 @@ impl View {
         Position { col, row }
     }
 
-    fn move_text_location(&mut self, direction: Direction) {
-        // 根据方向移动文本位置。
-        let Size { height, .. } = self.size;
+    
 
+    
+
+    fn move_text_location(&mut self, direction: Direction) {
+        let Size { height, .. } = self.size;
+        
+        
         match direction {
             Direction::Up => self.move_up(1),
             Direction::Down => self.move_down(1),
@@ -161,22 +247,19 @@ impl View {
         }
         self.scroll_text_location_into_view();
     }
-
     fn move_up(&mut self, step: usize) {
-        // 向上移动文本位置。
         self.text_location.line_index = self.text_location.line_index.saturating_sub(step);
         self.snap_to_valid_grapheme();
     }
-
     fn move_down(&mut self, step: usize) {
-        // 向下移动文本位置。
         self.text_location.line_index = self.text_location.line_index.saturating_add(step);
         self.snap_to_valid_grapheme();
         self.snap_to_valid_line();
     }
-
+    
+    
+    #[allow(clippy::arithmetic_side_effects)]
     fn move_right(&mut self) {
-        // 向右移动文本位置。
         let line_width = self
             .buffer
             .lines
@@ -189,9 +272,10 @@ impl View {
             self.move_down(1);
         }
     }
-
+    
+    
+    #[allow(clippy::arithmetic_side_effects)]
     fn move_left(&mut self) {
-        // 向左移动文本位置。
         if self.text_location.grapheme_index > 0 {
             self.text_location.grapheme_index -= 1;
         } else if self.text_location.line_index > 0 {
@@ -199,14 +283,10 @@ impl View {
             self.move_to_end_of_line();
         }
     }
-
     fn move_to_start_of_line(&mut self) {
-        // 移动到行首。
         self.text_location.grapheme_index = 0;
     }
-
     fn move_to_end_of_line(&mut self) {
-        // 移动到行尾。
         self.text_location.grapheme_index = self
             .buffer
             .lines
@@ -214,8 +294,9 @@ impl View {
             .map_or(0, Line::grapheme_count);
     }
 
+    
+    
     fn snap_to_valid_grapheme(&mut self) {
-        // 确保字形索引有效。
         self.text_location.grapheme_index = self
             .buffer
             .lines
@@ -224,88 +305,11 @@ impl View {
                 min(line.grapheme_count(), self.text_location.grapheme_index)
             });
     }
-
+    
+    
     fn snap_to_valid_line(&mut self) {
-        // 确保行索引有效。
         self.text_location.line_index = min(self.text_location.line_index, self.buffer.height());
     }
 
-    fn build_welcome_message(width: usize) -> String {
-        // 构建欢迎消息。
-        if width == 0 {
-            return " ".to_string();
-        }
-        let welcome_message = format!("{NAME} editor -- version {VERSION}");
-        let len = welcome_message.len();
-        if width <= len {
-            return "~".to_string();
-        }
-
-        let padding = (width.saturating_sub(len).saturating_sub(1)) / 2;
-
-        let mut full_message = format!("~{}{}", " ".repeat(padding), welcome_message);
-        full_message.truncate(width);
-        full_message
-    }
-
-    fn render_line(at: usize, line_text: &str) {
-        // 渲染一行文本。
-        let result = Terminal::print_row(at, line_text);
-        debug_assert!(result.is_ok(), "Failed to render line");
-    }
-    fn insert_char(&mut self, character: char) {
-        let old_len = self
-            .buffer
-            .lines
-            .get(self.text_location.line_index)
-            .map_or(0, Line::grapheme_count);
-        self.buffer.insert_char(character, self.text_location);
-
-        let new_len = self
-            .buffer
-            .lines
-            .get(self.text_location.line_index)
-            .map_or(0, Line::grapheme_count);
-        let grapheme_delta = new_len.saturating_sub(old_len);
-        if grapheme_delta > 0 {
-            self.move_right();
-        }
-        self.needs_redraw = true;
-    }
-    fn delete_backward(&mut self) {
-        if self.text_location.line_index != 0 || self.text_location.grapheme_index != 0 {
-            self.move_text_location(Direction::Left);
-            self.delete();
-        }
-    }
-    fn insert_newline(&mut self) {
-        self.buffer.insert_newline(self.text_location);
-        self.move_text_location(Direction::Right);
-        self.needs_redraw = true;
-    }
-    fn delete(&mut self) {
-        self.buffer.delete(self.text_location);
-        self.needs_redraw = true;
-    }
-    pub fn new(margin_bottom: usize) -> Self {
-        let terminal_size = Terminal::size().unwrap_or_default();
-        Self {
-            buffer: Buffer::default(),
-            needs_redraw: true,
-            size: Size {
-                width: terminal_size.width,
-                height: terminal_size.height.saturating_sub(margin_bottom),
-            },
-            text_location: Location::default(),
-            scroll_offset: Position::default(),
-        }
-    }
-    pub fn get_status(&self) -> DocumentStates {
-        DocumentStates {
-            total_lines: self.buffer.height(),
-            current_line_index: self.text_location.line_index,
-            file_name: self.buffer.file_name.clone(),
-            is_modified: self.buffer.dirty,
-        }
-    }
+    
 }
