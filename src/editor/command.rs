@@ -1,17 +1,19 @@
 use crossterm::event::{
     Event,
     KeyCode::{
-        Backspace, Char, Delete, Down, End, Enter, Home, Left, PageDown, PageUp, Right, Tab, Up,
+        self, Backspace, Char, Delete, Down, End, Enter, Home, Left, PageDown, PageUp, Right, Tab,
+        Up,
     },
     KeyEvent, KeyModifiers,
 };
+use std::convert::TryFrom;
 
-use super::terminal::Size;
+use super::Size;
 
 #[derive(Clone, Copy)]
 pub enum Move {
-    PageDown,
     PageUp,
+    PageDown,
     StartOfLine,
     EndOfLine,
     Up,
@@ -19,7 +21,6 @@ pub enum Move {
     Right,
     Down,
 }
-
 impl TryFrom<KeyEvent> for Move {
     type Error = String;
     fn try_from(event: KeyEvent) -> Result<Self, Self::Error> {
@@ -46,7 +47,6 @@ impl TryFrom<KeyEvent> for Move {
         }
     }
 }
-
 #[derive(Clone, Copy)]
 pub enum Edit {
     Insert(char),
@@ -54,9 +54,9 @@ pub enum Edit {
     Delete,
     DeleteBackward,
 }
-
 impl TryFrom<KeyEvent> for Edit {
     type Error = String;
+
     fn try_from(event: KeyEvent) -> Result<Self, Self::Error> {
         match (event.code, event.modifiers) {
             (Char(character), KeyModifiers::NONE | KeyModifiers::SHIFT) => {
@@ -79,6 +79,7 @@ pub enum System {
     Save,
     Resize(Size),
     Quit,
+    Dismiss,
 }
 
 impl TryFrom<KeyEvent> for System {
@@ -90,10 +91,12 @@ impl TryFrom<KeyEvent> for System {
 
         if modifiers == KeyModifiers::CONTROL {
             match code {
-                Char('d') => Ok(Self::Quit),
+                Char('q') => Ok(Self::Quit),
                 Char('s') => Ok(Self::Save),
                 _ => Err(format!("Unsupported CONTROL+{code:?} combination")),
             }
+        } else if modifiers == KeyModifiers::NONE && matches!(code, KeyCode::Esc) {
+            Ok(Self::Dismiss)
         } else {
             Err(format!(
                 "Unsupported key code {code:?} or modifier {modifiers:?}"
@@ -101,6 +104,7 @@ impl TryFrom<KeyEvent> for System {
         }
     }
 }
+
 #[derive(Clone, Copy)]
 pub enum Command {
     Move(Move),
@@ -108,6 +112,8 @@ pub enum Command {
     System(System),
 }
 
+// clippy::as_conversions: Will run into problems for rare edge case systems where usize < u16
+#[allow(clippy::as_conversions)]
 impl TryFrom<Event> for Command {
     type Error = String;
     fn try_from(event: Event) -> Result<Self, Self::Error> {
